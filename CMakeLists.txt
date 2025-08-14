@@ -47,6 +47,17 @@ LinkGLFW(voronoiable PRIVATE)
 include(${CMAKE_DIR}/LinkGLAD.cmake)
 LinkGLAD(voronoiable PRIVATE)
 
+# Add assets
+set (
+    ASSETS
+    "shaders/shader.vert"
+    "shaders/shader.frag"
+    )
+
+foreach(ASSET ${ASSETS})
+    file(GENERATE OUTPUT ${ASSET} INPUT ${ASSET})
+endforeach()
+
 find_package(OpenGL REQUIRED)
 if (OpenGL_FOUND)
     target_include_directories(voronoiable PRIVATE ${OPENGL_INCLDUE_DIRS})

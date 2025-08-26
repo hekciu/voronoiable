@@ -41,6 +41,11 @@ struct LineEq {
 };
 
 
+
+GLfloat CalculateDistance(const PointData& pd1, const PointData& pd2) {
+    return std::sqrt(std::pow(pd1.x - pd2.x, 2) + std::pow(pd1.y - pd2.y, 2));
+}
+
 LineEq GetLineEquation(const PointData & p1, const PointData & p2){
     // TODO: handle situation if x1 == x2
 
@@ -142,8 +147,53 @@ PointData CalculateCenterOfGravity(const std::vector<Point> & points) {
 }
 
 
-GLfloat CalculateDistance(const PointData & pd1, const PointData & pd2) {
-    return std::sqrt(std::pow(pd1.x - pd2.x, 2) + std::pow(pd1.y - pd2.y, 2));
+std::vector<PointData> FindBestTriangle(
+    const PointData& point,
+    const std::vector<PointData>& points,
+    const std::vector<std::vector<PointData>>& currentPolygons,
+    const size_t omit_index
+) {
+    GLfloat currentBestArea = 0;
+
+    std::pair<PointData, PointData> currentBest = {};
+
+    for (size_t i = 0; i < points.size(); i++) {
+        if (i == omit_index) continue;
+
+        size_t point_1_index = i;
+        size_t point_2_index = i % (points.size() - 1);
+
+        const PointData& currentP1 = points[point_1_index];
+        const PointData& currentP2 = points[point_2_index];
+
+        bool intersect = false;
+
+        for (const std::vector<PointData>& polygon : currentPolygons) {
+            if (DoPolygonsIntersect(polygon, { point, currentP1, currentP2 })) {
+                intersect = true;
+            }
+        }
+
+        if (intersect) continue;
+
+        GLfloat area = GetTriangleArea(point, currentP1, currentP2);
+
+        if (area > currentBestArea) {
+            currentBestArea = area;
+            currentBest.first = currentP1;
+            currentBest.second = currentP1;
+        }
+    }
+
+    if (currentBestArea > 0) {
+        return {
+            point,
+            currentBest.first,
+            currentBest.second
+        };
+    }
+
+    return {};
 }
 
 
@@ -166,10 +216,19 @@ std::vector<std::vector<PointData>> ExtractPolygons(const std::vector<Point> & p
 
     // for every point find best two points to create triangle
 
+    std::vector<PointData> pointsData = {};
+
+    for (const Point& point : pointsCopy) {
+        pointsData.push_back(point.pointData);
+    }
+
     std::vector<std::vector<PointData>> triangles = {};
 
-    bool isCurrentBest = false;
-    PointData currentBestP1 = {};
+    for (size_t i = 0; i < pointsData.size(); i++) {
+        const auto& point = pointsData[i];
+
+        const auto triangle = FindBestTriangle(point, pointsData, triangles, i);
+    }
 
     return output;
 }
@@ -323,6 +382,19 @@ std::vector<Point> TransformTrianglesIntoPoints(const std::vector<Triangle> & tr
 }
 
 
+void PrintPolygons(const std::vector<std::vector<PointData>>& polygons) {
+    for (const auto& poly : polygons) {
+        std::cout << "Polygon" << std::endl;
+
+        for (const auto& point : poly) {
+            std::cout << "x: " << point.x << " y: " << point.y << " | ";
+        }
+
+        std::cout << "" << std::endl;
+    }
+}
+
+
 int main()
 {
     glfwInit();
@@ -367,7 +439,11 @@ int main()
     AddPoint(points, -0.9, -0.5);
     AddPoint(points, -0.5, -0.9);
 
-    ExtractPolygons(points);
+    const auto polygons = ExtractPolygons(points);
+
+    std::cout << polygons.size() << '\n';
+
+    PrintPolygons(polygons);
 
     /*
         pomysł -> jeżeli w środku wielokąta nie ma żadnego innego punktu (w tym na linii boku)

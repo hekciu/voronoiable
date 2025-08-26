@@ -77,12 +77,22 @@ bool DoLinesIntersect(
     LineEq lineEq1 = GetLineEquation(l1p1, l1p2);
     LineEq lineEq2 = GetLineEquation(l2p1, l2p2);
 
+    if (lineEq1.a == lineEq2.a) {
+        if (lineEq1.b == lineEq2.b) {
+            return true;
+        }
+        else {
+            return false;
+        }
+    }
+
     // TODO:: use std::pair to handle error if lines do not intersect
     PointData intersectionPoint = GetIntersectionPoint(lineEq1, lineEq2);
 
-    // If if exists on one section it definitely does on the other (and lines do intersect)
-    return intersectionPoint.x > std::fmin(l1p1.x, l1p2.x) &&
-        intersectionPoint.x < std::fmax(l1p1.x, l1p2.x);
+    std::cout << "intersection point x:" << intersectionPoint.x << " y: " << intersectionPoint.y << '\n';
+
+    return intersectionPoint.x <= std::fmin(l1p1.x, l1p2.x) &&
+        intersectionPoint.x >= std::fmax(l1p1.x, l1p2.x);
 }
 
 
@@ -112,8 +122,10 @@ bool DoPolygonsIntersect(const std::vector<PointData> & first, const std::vector
 GLfloat CalculatePointToLineDistance(const PointData & pointData, const LineEq & lineEquation) {
     LineEq perpendicularLine = {};
 
-    perpendicularLine.b = pointData.y - (pointData.x / lineEquation.a);
-    perpendicularLine.a = (pointData.y - perpendicularLine.b) / pointData.x;
+    perpendicularLine.a = -lineEquation.a;
+    perpendicularLine.b = pointData.y + pointData.x * lineEquation.a;
+
+    std::cout << "perpendicular line a: " << perpendicularLine.a << " b: " << perpendicularLine.b << '\n';
 
     const PointData intersectionPoint = GetIntersectionPoint(lineEquation, perpendicularLine);
 
@@ -124,9 +136,17 @@ GLfloat CalculatePointToLineDistance(const PointData & pointData, const LineEq &
 GLfloat GetTriangleArea(const PointData & p1, const PointData & p2, const PointData & p3) {
     const LineEq line = GetLineEquation(p1, p2);
 
+    std::cout << "p1: " << p1.x << " " << p1.y << '\n';
+    std::cout << "p2: " << p2.x << " " << p2.y << '\n';
+    std::cout << "line a: " << line.a << " b: " << line.b << '\n';
+
     const GLfloat a = CalculateDistance(p1, p2);
 
+    std::cout << "distance " << a << '\n';
+
     const GLfloat h = CalculatePointToLineDistance(p3, line);
+
+    std::cout << "point to line distance " << h << '\n';
 
     return (a * h) / 2;
 }
@@ -161,7 +181,7 @@ std::vector<PointData> FindBestTriangle(
         if (i == omit_index) continue;
 
         size_t point_1_index = i;
-        size_t point_2_index = i % (points.size() - 1);
+        size_t point_2_index = (i + 1) % (points.size() - 1);
 
         const PointData& currentP1 = points[point_1_index];
         const PointData& currentP2 = points[point_2_index];
@@ -178,10 +198,12 @@ std::vector<PointData> FindBestTriangle(
 
         GLfloat area = GetTriangleArea(point, currentP1, currentP2);
 
+        std::cout << "i " << i << " area " << area << '\n';
+
         if (area > currentBestArea) {
             currentBestArea = area;
             currentBest.first = currentP1;
-            currentBest.second = currentP1;
+            currentBest.second = currentP2;
         }
     }
 
@@ -199,8 +221,6 @@ std::vector<PointData> FindBestTriangle(
 
 std::vector<std::vector<PointData>> ExtractPolygons(const std::vector<Point> & points) {
     std::vector<Point> pointsCopy(points);
-
-    std::vector<std::vector<PointData>> output = {};
 
     // easier version - triangles
 
@@ -224,13 +244,26 @@ std::vector<std::vector<PointData>> ExtractPolygons(const std::vector<Point> & p
 
     std::vector<std::vector<PointData>> triangles = {};
 
+    std::vector<PointData> triangle = {};
+
     for (size_t i = 0; i < pointsData.size(); i++) {
         const auto& point = pointsData[i];
 
-        const auto triangle = FindBestTriangle(point, pointsData, triangles, i);
+        //do {
+			triangle = FindBestTriangle(point, pointsData, triangles, i);
+
+            if (triangle.size() > 0) {
+                triangles.push_back(triangle);
+
+            }
+        //} while (triangle.size() > 0);
+
+        if (triangle.size() > 0) {
+            triangles.push_back(triangle);
+        }
     }
 
-    return output;
+    return triangles;
 }
 
 
@@ -430,14 +463,14 @@ int main()
     std::vector<Point> points = {};
 
     AddPoint(points, -0.9, -0.9);
-    AddPoint(points, -0.7, -0.9);
-    AddPoint(points, -0.9, -0.7);
+    //AddPoint(points, -0.7, -0.9);
+    //AddPoint(points, -0.9, -0.7);
     AddPoint(points, -0.7, -0.7);
-    AddPoint(points, -0.5, -0.7);
-    AddPoint(points, -0.7, -0.5);
-    AddPoint(points, -0.5, -0.5);
-    AddPoint(points, -0.9, -0.5);
-    AddPoint(points, -0.5, -0.9);
+    //AddPoint(points, -0.5, -0.7);
+    //AddPoint(points, -0.7, -0.5);
+    AddPoint(points, -0.6, -0.5);
+    //AddPoint(points, -0.9, -0.5);
+    AddPoint(points, -0.5, -0.8);
 
     const auto polygons = ExtractPolygons(points);
 

@@ -3,6 +3,7 @@
 #include <vector>
 #include <random>
 #include <string>
+#include <limits>
 
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
@@ -41,6 +42,27 @@ struct LineEq {
 };
 
 
+bool FloatsEqual(const GLfloat & f1, const GLfloat & f2) {
+    const auto constexpr epsilon = std::numeric_limits<GLfloat>().epsilon();
+
+    return std::fabs(f1 - f2) < epsilon;
+}
+
+
+bool FloatsBiggerOrEqual(const GLfloat & f1, const GLfloat & f2) {
+    return f1 > f2 || FloatsEqual(f1, f2);
+}
+
+
+bool FloatsLessOrEqual(const GLfloat & f1, const GLfloat & f2) {
+    return f1 < f2 || FloatsEqual(f1, f2);
+}
+
+
+bool PointsDataEqual(const PointData & pd1, const PointData & pd2) {
+    return FloatsEqual(pd1.x, pd2.x) && FloatsEqual(pd1.y, pd2.y);
+}
+
 
 GLfloat CalculateDistance(const PointData& pd1, const PointData& pd2) {
     return std::sqrt(std::pow(pd1.x - pd2.x, 2) + std::pow(pd1.y - pd2.y, 2));
@@ -77,8 +99,8 @@ bool DoLinesIntersect(
     LineEq lineEq1 = GetLineEquation(l1p1, l1p2);
     LineEq lineEq2 = GetLineEquation(l2p1, l2p2);
 
-    if (lineEq1.a == lineEq2.a) {
-        if (lineEq1.b == lineEq2.b) {
+    if (FloatsEqual(lineEq1.a, lineEq2.a)) {
+        if (FloatsEqual(lineEq1.b, lineEq2.b)) {
             return true;
         }
         else {
@@ -89,10 +111,29 @@ bool DoLinesIntersect(
     // TODO:: use std::pair to handle error if lines do not intersect
     PointData intersectionPoint = GetIntersectionPoint(lineEq1, lineEq2);
 
+    std::cout << "first line -> " << "x1: " << l1p1.x << " y1: " << l1p1.y << "x2: " << l1p2.x << " y2: " << l1p2.y << '\n';
+    std::cout << "second line -> " << "x1: " << l2p1.x << " y1: " << l2p1.y << "x2: " << l2p2.x << " y2: " << l2p2.y << '\n';
     std::cout << "intersection point x:" << intersectionPoint.x << " y: " << intersectionPoint.y << '\n';
 
-    return intersectionPoint.x <= std::fmin(l1p1.x, l1p2.x) &&
-        intersectionPoint.x >= std::fmax(l1p1.x, l1p2.x);
+    GLfloat x1_first = std::fmin(l1p1.x, l1p2.x);
+    GLfloat x1_second = std::fmax(l1p1.x, l1p2.x);
+
+    GLfloat x2_first = std::fmin(l2p1.x, l2p2.x);
+    GLfloat x2_second = std::fmax(l2p1.x, l2p2.x);
+
+    bool isOnTheFirstLine = FloatsBiggerOrEqual(intersectionPoint.x, x1_first) && FloatsLessOrEqual(intersectionPoint.x, x1_second);
+    bool isOnTheSecondLine = FloatsBiggerOrEqual(intersectionPoint.x, x2_first) && FloatsLessOrEqual(intersectionPoint.x, x2_second);
+
+    bool isOneOfThePoints = PointsDataEqual(intersectionPoint, l1p1) ||
+        PointsDataEqual(intersectionPoint, l1p2) ||
+        PointsDataEqual(intersectionPoint, l2p1) ||
+        PointsDataEqual(intersectionPoint, l2p2);
+
+    // if the intersection point is one of the input points, they DO NOT intersect
+
+    std::cout << "first : " << isOnTheFirstLine << " second: " << isOnTheSecondLine << '\n';
+
+    return  isOnTheFirstLine && isOnTheSecondLine && !isOneOfThePoints;
 }
 
 
@@ -220,7 +261,9 @@ std::vector<PointData> FindBestTriangle(
 
 
 std::vector<std::vector<PointData>> ExtractPolygons(const std::vector<Point> & points) {
-    std::vector<Point> pointsCopy(points);
+    std::cout << "A:D" << '\n';
+
+	std::vector<Point> pointsCopy(points);
 
     // easier version - triangles
 
@@ -249,18 +292,14 @@ std::vector<std::vector<PointData>> ExtractPolygons(const std::vector<Point> & p
     for (size_t i = 0; i < pointsData.size(); i++) {
         const auto& point = pointsData[i];
 
-        //do {
+        do {
 			triangle = FindBestTriangle(point, pointsData, triangles, i);
 
             if (triangle.size() > 0) {
                 triangles.push_back(triangle);
 
             }
-        //} while (triangle.size() > 0);
-
-        if (triangle.size() > 0) {
-            triangles.push_back(triangle);
-        }
+        } while (triangle.size() > 0);
     }
 
     return triangles;

@@ -72,7 +72,7 @@ bool PointsDataEqual(const PointData & pd1, const PointData & pd2) {
 
 
 GLfloat CalculateDistance(const PointData& pd1, const PointData& pd2) {
-    return std::sqrt(std::pow(pd1.x - pd2.x, 2) + std::pow(pd1.y - pd2.y, 2));
+    return std::sqrtf(std::powf(pd1.x - pd2.x, 2) + std::powf(pd1.y - pd2.y, 2));
 }
 
 
@@ -101,8 +101,10 @@ PointData GetIntersectionPoint(const LineEq& le1, const LineEq& le2) {
 GLfloat CalculatePointToLineDistance(const PointData & pointData, const LineEq & lineEquation) {
     LineEq perpendicularLine = {};
 
-    perpendicularLine.a = -lineEquation.a;
-    perpendicularLine.b = pointData.y + pointData.x * lineEquation.a;
+    tutaj jest jakas lipa ogolnie nie działa liczenie pola trójkąta
+
+    perpendicularLine.a = -1.0f / lineEquation.a;
+    perpendicularLine.b = pointData.y - pointData.x * lineEquation.a;
 
     const PointData intersectionPoint = GetIntersectionPoint(lineEquation, perpendicularLine);
 
@@ -117,7 +119,7 @@ GLfloat GetTriangleArea(const PointData & p1, const PointData & p2, const PointD
 
     const GLfloat h = CalculatePointToLineDistance(p3, line);
 
-    return (a * h) / 2;
+    return (a * h) / 2.0f;
 }
 
 
@@ -145,7 +147,18 @@ bool IsPointInsideTriangle(const TriangleData& triangleData, const PointData& po
 
     bool doesPointLayOnTheEdge = FloatsEqual(firstArea, 0) || FloatsEqual(secondArea, 0) || FloatsEqual(thirdArea, 0);
 
-    return !doesPointLayOnTheEdge && FloatsEqual(wholeArea, firstArea + secondArea + thirdArea);
+    bool result = !doesPointLayOnTheEdge && FloatsEqual(wholeArea, firstArea + secondArea + thirdArea);
+
+    std::cout << "triangle: " << '\n';
+    std::cout << "p1 x: " << triangleData.pd1.x << " y: " << triangleData.pd1.y;
+    std::cout << " p2 x: " << triangleData.pd2.x << " y: " << triangleData.pd2.y;
+    std::cout << " p3 x: " << triangleData.pd3.x << " y: " << triangleData.pd3.y << '\n';
+    std::cout << "point x " << pointData.x << " y: " << pointData.y << '\n';
+    std::cout << "first area: " << firstArea << " second area: " << secondArea << " third area " << thirdArea <<  " whole area " << wholeArea << '\n';
+    std::cout << "is point inside triangle " << result << '\n';
+    std::cout << "does point lay on the edge " << doesPointLayOnTheEdge << '\n' << '\n' << std::endl;
+
+    return result;
 }
  
 
@@ -227,7 +240,7 @@ bool DoTrianglesIntersect(const TriangleData& t1, const TriangleData& t2) {
         {t2.pd3, t2.pd1}
     };
 
-    uint8_t linesIntersecting = 0;
+    uint32_t linesIntersecting = 0;
 
     for (const auto& line1 : linesT1) {
         for (const auto& line2 : linesT2) {
@@ -237,7 +250,7 @@ bool DoTrianglesIntersect(const TriangleData& t1, const TriangleData& t2) {
         }
     }
 
-    return linesIntersecting >= 2;
+    return linesIntersecting >= 3;
 }
 std::optional<TriangleData> FindBestTriangle(
     const PointData& point,
@@ -318,11 +331,11 @@ std::vector<TriangleData> ExtractTriangles(const std::vector<Point> & points) {
         do {
 			triangle = FindBestTriangle(point, otherPoints, triangles);
 
-            if (triangle.has_value() > 0) {
+            if (triangle.has_value()) {
                 triangles.push_back(triangle.value());
 
             }
-        } while (triangle.has_value() > 0);
+        } while (triangle.has_value());
     }
 
     return triangles;

@@ -4,9 +4,11 @@
 #include <random>
 #include <string>
 #include <limits>
+#include <optional>
 
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
+#include <cassert>
 
 
 struct Color {
@@ -28,10 +30,15 @@ struct Point {
 };
 
 
-struct Triangle {
+struct TriangleData {
     PointData pd1;
     PointData pd2;
     PointData pd3;
+};
+
+
+struct Triangle {
+    TriangleData triangleData;
     Color color;
 };
 
@@ -68,6 +75,7 @@ GLfloat CalculateDistance(const PointData& pd1, const PointData& pd2) {
     return std::sqrt(std::pow(pd1.x - pd2.x, 2) + std::pow(pd1.y - pd2.y, 2));
 }
 
+
 LineEq GetLineEquation(const PointData & p1, const PointData & p2){
     // TODO: handle situation if x1 == x2
 
@@ -87,6 +95,70 @@ PointData GetIntersectionPoint(const LineEq& le1, const LineEq& le2) {
     output.y = output.x * le1.a + le1.b;
 
     return output;
+}
+
+
+GLfloat CalculatePointToLineDistance(const PointData & pointData, const LineEq & lineEquation) {
+    LineEq perpendicularLine = {};
+
+    perpendicularLine.a = -lineEquation.a;
+    perpendicularLine.b = pointData.y + pointData.x * lineEquation.a;
+
+    const PointData intersectionPoint = GetIntersectionPoint(lineEquation, perpendicularLine);
+
+    return CalculateDistance(pointData, intersectionPoint);
+}
+
+
+GLfloat GetTriangleArea(const PointData & p1, const PointData & p2, const PointData & p3) {
+    const LineEq line = GetLineEquation(p1, p2);
+
+    const GLfloat a = CalculateDistance(p1, p2);
+
+    const GLfloat h = CalculatePointToLineDistance(p3, line);
+
+    return (a * h) / 2;
+}
+
+
+PointData CalculateCenterOfGravity(const std::vector<Point> & points) {
+    PointData sum = {0, 0};
+
+    for (const auto& point : points) {
+		sum.x += point.pointData.x;
+		sum.y += point.pointData.y;
+    }
+
+    return {
+        sum.x / points.size(),
+        sum.y / points.size(),
+    };
+}
+
+
+bool IsPointInsideTriangle(const TriangleData& triangleData, const PointData& pointData) {
+    GLfloat wholeArea = GetTriangleArea(triangleData.pd1, triangleData.pd2, triangleData.pd3);
+
+    GLfloat firstArea = GetTriangleArea(pointData, triangleData.pd2, triangleData.pd3);
+    GLfloat secondArea = GetTriangleArea(triangleData.pd1, pointData, triangleData.pd3);
+    GLfloat thirdArea = GetTriangleArea(triangleData.pd1, triangleData.pd2, pointData);
+
+    bool doesPointLayOnTheEdge = FloatsEqual(firstArea, 0) || FloatsEqual(secondArea, 0) || FloatsEqual(thirdArea, 0);
+
+    return !doesPointLayOnTheEdge && FloatsEqual(wholeArea, firstArea + secondArea + thirdArea);
+}
+ 
+
+void PrintTriangles(const std::vector<TriangleData>& triangles) {
+    for (const auto& triangle : triangles) {
+        std::cout << "triangle" << std::endl;
+
+		std::cout << "p1 x: " << triangle.pd1.x << " y: " << triangle.pd1.y << " | ";
+		std::cout << "p2 x: " << triangle.pd2.x << " y: " << triangle.pd2.y << " | ";
+		std::cout << "p3 x: " << triangle.pd3.x << " y: " << triangle.pd3.y << " | ";
+
+        std::cout << "" << std::endl;
+    }
 }
 
 
@@ -111,10 +183,6 @@ bool DoLinesIntersect(
     // TODO:: use std::pair to handle error if lines do not intersect
     PointData intersectionPoint = GetIntersectionPoint(lineEq1, lineEq2);
 
-    std::cout << "first line -> " << "x1: " << l1p1.x << " y1: " << l1p1.y << "x2: " << l1p2.x << " y2: " << l1p2.y << '\n';
-    std::cout << "second line -> " << "x1: " << l2p1.x << " y1: " << l2p1.y << "x2: " << l2p2.x << " y2: " << l2p2.y << '\n';
-    std::cout << "intersection point x:" << intersectionPoint.x << " y: " << intersectionPoint.y << '\n';
-
     GLfloat x1_first = std::fmin(l1p1.x, l1p2.x);
     GLfloat x1_second = std::fmax(l1p1.x, l1p2.x);
 
@@ -131,106 +199,68 @@ bool DoLinesIntersect(
 
     // if the intersection point is one of the input points, they DO NOT intersect
 
-    std::cout << "first : " << isOnTheFirstLine << " second: " << isOnTheSecondLine << '\n';
-
     return  isOnTheFirstLine && isOnTheSecondLine && !isOneOfThePoints;
 }
 
 
-bool DoPolygonsIntersect(const std::vector<PointData> & first, const std::vector<PointData> & second) {
-    for (size_t i = 0; i < first.size(); i++) {
-        size_t first_p1_index = i;
-        size_t first_p2_index = i == first.size() - 1 ? 0 : i + 1;
+bool DoTrianglesIntersect(const TriangleData& t1, const TriangleData& t2) {
+    const std::vector<PointData> points1 = {t1.pd1, t1.pd2, t1.pd3};
+    const std::vector<PointData> points2 = {t2.pd1, t2.pd2, t2.pd3};
 
-        PointData first_p1 = first[first_p1_index];
-        PointData first_p2 = first[first_p2_index];
-
-		for (size_t j = 0; j < second.size(); j++) {
-			size_t second_p1_index = i;
-			size_t second_p2_index = i == second.size() - 1 ? 0 : i + 1;
-
-			PointData second_p1 = second[second_p1_index];
-			PointData second_p2 = second[second_p2_index];
-
-            if (DoLinesIntersect(first_p1, first_p2, second_p1, second_p2)) return true;
-		}
+    for (const auto& point : points1) {
+        if (IsPointInsideTriangle(t2, point)) return true;
     }
 
-    return false;
-}
-
-
-GLfloat CalculatePointToLineDistance(const PointData & pointData, const LineEq & lineEquation) {
-    LineEq perpendicularLine = {};
-
-    perpendicularLine.a = -lineEquation.a;
-    perpendicularLine.b = pointData.y + pointData.x * lineEquation.a;
-
-    std::cout << "perpendicular line a: " << perpendicularLine.a << " b: " << perpendicularLine.b << '\n';
-
-    const PointData intersectionPoint = GetIntersectionPoint(lineEquation, perpendicularLine);
-
-    return CalculateDistance(pointData, intersectionPoint);
-}
-
-
-GLfloat GetTriangleArea(const PointData & p1, const PointData & p2, const PointData & p3) {
-    const LineEq line = GetLineEquation(p1, p2);
-
-    std::cout << "p1: " << p1.x << " " << p1.y << '\n';
-    std::cout << "p2: " << p2.x << " " << p2.y << '\n';
-    std::cout << "line a: " << line.a << " b: " << line.b << '\n';
-
-    const GLfloat a = CalculateDistance(p1, p2);
-
-    std::cout << "distance " << a << '\n';
-
-    const GLfloat h = CalculatePointToLineDistance(p3, line);
-
-    std::cout << "point to line distance " << h << '\n';
-
-    return (a * h) / 2;
-}
-
-
-PointData CalculateCenterOfGravity(const std::vector<Point> & points) {
-    PointData sum = {0, 0};
-
-    for (const auto& point : points) {
-		sum.x += point.pointData.x;
-		sum.y += point.pointData.y;
+    for (const auto& point : points2) {
+        if (IsPointInsideTriangle(t1, point)) return true;
     }
 
-    return {
-        sum.x / points.size(),
-        sum.y / points.size(),
+    const std::vector<std::pair<PointData, PointData>> linesT1 = {
+        {t1.pd1, t1.pd2},
+        {t1.pd2, t1.pd3},
+        {t1.pd3, t1.pd1}
     };
+
+    const std::vector<std::pair<PointData, PointData>> linesT2 = {
+        {t2.pd1, t2.pd2},
+        {t2.pd2, t2.pd3},
+        {t2.pd3, t2.pd1}
+    };
+
+    uint8_t linesIntersecting = 0;
+
+    for (const auto& line1 : linesT1) {
+        for (const auto& line2 : linesT2) {
+            if (DoLinesIntersect(line1.first, line1.second, line2.first, line1.second)) {
+                linesIntersecting++;
+            }
+        }
+    }
+
+    return linesIntersecting >= 2;
 }
-
-
-std::vector<PointData> FindBestTriangle(
+std::optional<TriangleData> FindBestTriangle(
     const PointData& point,
     const std::vector<PointData>& points,
-    const std::vector<std::vector<PointData>>& currentPolygons,
-    const size_t omit_index
+    const std::vector<TriangleData>& currentTriangles
 ) {
-    GLfloat currentBestArea = 0;
+    GLfloat initialArea = 2 * 2;
+    GLfloat currentBestArea = initialArea;
 
     std::pair<PointData, PointData> currentBest = {};
 
     for (size_t i = 0; i < points.size(); i++) {
-        if (i == omit_index) continue;
 
         size_t point_1_index = i;
-        size_t point_2_index = (i + 1) % (points.size() - 1);
+        size_t point_2_index = i == points.size() - 1 ? 0 : i + 1;
 
         const PointData& currentP1 = points[point_1_index];
         const PointData& currentP2 = points[point_2_index];
 
         bool intersect = false;
 
-        for (const std::vector<PointData>& polygon : currentPolygons) {
-            if (DoPolygonsIntersect(polygon, { point, currentP1, currentP2 })) {
+        for (const auto& triangle : currentTriangles) {
+            if (DoTrianglesIntersect(triangle, { point, currentP1, currentP2 })) {
                 intersect = true;
             }
         }
@@ -239,43 +269,29 @@ std::vector<PointData> FindBestTriangle(
 
         GLfloat area = GetTriangleArea(point, currentP1, currentP2);
 
-        std::cout << "i " << i << " area " << area << '\n';
-
-        if (area > currentBestArea) {
+        if (area < currentBestArea) {
             currentBestArea = area;
             currentBest.first = currentP1;
             currentBest.second = currentP2;
         }
     }
 
-    if (currentBestArea > 0) {
-        return {
+    if (!FloatsEqual(currentBestArea, initialArea)) {
+        return std::make_optional<TriangleData>({
             point,
             currentBest.first,
             currentBest.second
-        };
+        });
     }
 
-    return {};
+    return std::nullopt;
 }
 
 
-std::vector<std::vector<PointData>> ExtractPolygons(const std::vector<Point> & points) {
-    std::cout << "A:D" << '\n';
-
+std::vector<TriangleData> ExtractTriangles(const std::vector<Point> & points) {
 	std::vector<Point> pointsCopy(points);
 
     // easier version - triangles
-
-    // sort points from bottom-left to top-right
-    PointData bottomLeft = { -1, -1 };
-
-    std::sort(pointsCopy.begin(), pointsCopy.end(), [bottomLeft](const Point & p1, const Point & p2) {
-        GLfloat firstDistance = CalculateDistance(bottomLeft, p1.pointData);
-        GLfloat secondDistance = CalculateDistance(bottomLeft, p2.pointData);
-
-        return firstDistance < secondDistance;
-	});
 
     // for every point find best two points to create triangle
 
@@ -285,21 +301,28 @@ std::vector<std::vector<PointData>> ExtractPolygons(const std::vector<Point> & p
         pointsData.push_back(point.pointData);
     }
 
-    std::vector<std::vector<PointData>> triangles = {};
+    std::vector<TriangleData> triangles = {};
 
-    std::vector<PointData> triangle = {};
+    std::optional<TriangleData> triangle = {};
+
+    for (const auto& point : pointsData) {
+        std::cout << "point " << point.x << " " << point.y << '\n';
+    }
 
     for (size_t i = 0; i < pointsData.size(); i++) {
         const auto& point = pointsData[i];
 
-        do {
-			triangle = FindBestTriangle(point, pointsData, triangles, i);
+		std::vector<PointData> otherPoints = pointsData;
+		otherPoints.erase(otherPoints.begin() + i);
 
-            if (triangle.size() > 0) {
-                triangles.push_back(triangle);
+        do {
+			triangle = FindBestTriangle(point, otherPoints, triangles);
+
+            if (triangle.has_value() > 0) {
+                triangles.push_back(triangle.value());
 
             }
-        } while (triangle.size() > 0);
+        } while (triangle.has_value() > 0);
     }
 
     return triangles;
@@ -403,12 +426,12 @@ std::vector<Triangle> CreateTrianglesFromPoints(const std::vector<Point> & point
     for (const Point & point : points) {
         Triangle triangle1 = {};
 
-        triangle1.pd1.x = point.pointData.x - 0.05;
-        triangle1.pd1.y = point.pointData.y;
-        triangle1.pd2.x = point.pointData.x - 0.1;
-        triangle1.pd2.y = point.pointData.y;
-        triangle1.pd3.x = point.pointData.x - 0.075;
-        triangle1.pd3.y = point.pointData.y - 0.05;
+        triangle1.triangleData.pd1.x = point.pointData.x - 0.05;
+        triangle1.triangleData.pd1.y = point.pointData.y;
+        triangle1.triangleData.pd2.x = point.pointData.x - 0.1;
+        triangle1.triangleData.pd2.y = point.pointData.y;
+        triangle1.triangleData.pd3.x = point.pointData.x - 0.075;
+        triangle1.triangleData.pd3.y = point.pointData.y - 0.05;
 
         triangle1.color = CreateRandomColor();
         triangles.push_back(triangle1);
@@ -436,13 +459,13 @@ std::vector<Point> TransformTrianglesIntoPoints(const std::vector<Triangle> & tr
         Point point2 = {};
         Point point3 = {};
 
-        point1.pointData = triangle.pd1;
+        point1.pointData = triangle.triangleData.pd1;
         point1.color = triangle.color;
 
-        point2.pointData = triangle.pd2;
+        point2.pointData = triangle.triangleData.pd2;
         point2.color = triangle.color;
 
-        point3.pointData = triangle.pd3;
+        point3.pointData = triangle.triangleData.pd3;
         point3.color = triangle.color;
 
         output.push_back(point1);
@@ -451,19 +474,6 @@ std::vector<Point> TransformTrianglesIntoPoints(const std::vector<Triangle> & tr
     }
 
     return output;
-}
-
-
-void PrintPolygons(const std::vector<std::vector<PointData>>& polygons) {
-    for (const auto& poly : polygons) {
-        std::cout << "Polygon" << std::endl;
-
-        for (const auto& point : poly) {
-            std::cout << "x: " << point.x << " y: " << point.y << " | ";
-        }
-
-        std::cout << "" << std::endl;
-    }
 }
 
 
@@ -511,26 +521,11 @@ int main()
     //AddPoint(points, -0.9, -0.5);
     AddPoint(points, -0.5, -0.8);
 
-    const auto polygons = ExtractPolygons(points);
+    const auto polygons = ExtractTriangles(points);
 
     std::cout << polygons.size() << '\n';
 
-    PrintPolygons(polygons);
-
-    /*
-        pomysł -> jeżeli w środku wielokąta nie ma żadnego innego punktu (w tym na linii boku)
-        oraz żadne z dwóch przylegających do siebie boków nie tworzą kąta 180 stopni
-        to musimy policzyc srodek ciezkosci tego wielokąta (lub dwoch punktów)
-    */
-
-    /*
-    PointData testGravityCenter = CalculateCenterOfGravity(points);
-
-    points.push_back({
-        testGravityCenter,
-        {0, 0, 0}
-	});
-    */
+    PrintTriangles(polygons);
 
     const std::vector<Triangle> triangles = CreateTrianglesFromPoints(points);
 

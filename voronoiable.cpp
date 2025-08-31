@@ -101,10 +101,8 @@ PointData GetIntersectionPoint(const LineEq& le1, const LineEq& le2) {
 GLfloat CalculatePointToLineDistance(const PointData & pointData, const LineEq & lineEquation) {
     LineEq perpendicularLine = {};
 
-    tutaj jest jakas lipa ogolnie nie działa liczenie pola trójkąta
-
     perpendicularLine.a = -1.0f / lineEquation.a;
-    perpendicularLine.b = pointData.y - pointData.x * lineEquation.a;
+    perpendicularLine.b = pointData.y - pointData.x * perpendicularLine.a;
 
     const PointData intersectionPoint = GetIntersectionPoint(lineEquation, perpendicularLine);
 
@@ -148,15 +146,6 @@ bool IsPointInsideTriangle(const TriangleData& triangleData, const PointData& po
     bool doesPointLayOnTheEdge = FloatsEqual(firstArea, 0) || FloatsEqual(secondArea, 0) || FloatsEqual(thirdArea, 0);
 
     bool result = !doesPointLayOnTheEdge && FloatsEqual(wholeArea, firstArea + secondArea + thirdArea);
-
-    std::cout << "triangle: " << '\n';
-    std::cout << "p1 x: " << triangleData.pd1.x << " y: " << triangleData.pd1.y;
-    std::cout << " p2 x: " << triangleData.pd2.x << " y: " << triangleData.pd2.y;
-    std::cout << " p3 x: " << triangleData.pd3.x << " y: " << triangleData.pd3.y << '\n';
-    std::cout << "point x " << pointData.x << " y: " << pointData.y << '\n';
-    std::cout << "first area: " << firstArea << " second area: " << secondArea << " third area " << thirdArea <<  " whole area " << wholeArea << '\n';
-    std::cout << "is point inside triangle " << result << '\n';
-    std::cout << "does point lay on the edge " << doesPointLayOnTheEdge << '\n' << '\n' << std::endl;
 
     return result;
 }

@@ -121,12 +121,12 @@ GLfloat GetTriangleArea(const PointData & p1, const PointData & p2, const PointD
 }
 
 
-PointData CalculateCenterOfGravity(const std::vector<Point> & points) {
+PointData CalculateCenterOfGravity(const std::vector<PointData> & points) {
     PointData sum = {0, 0};
 
     for (const auto& point : points) {
-		sum.x += point.pointData.x;
-		sum.y += point.pointData.y;
+		sum.x += point.x;
+		sum.y += point.y;
     }
 
     return {
@@ -331,6 +331,21 @@ std::vector<TriangleData> ExtractTriangles(const std::vector<Point> & points) {
 }
 
 
+std::vector<TriangleData> ExtractSmallerTriangles(const std::vector<TriangleData>& input) {
+    std::vector<TriangleData> output = {};
+
+    for (const auto& triangle : input) {
+        const auto center = CalculateCenterOfGravity({ triangle.pd1, triangle.pd2, triangle.pd3 });
+
+        output.push_back({triangle.pd1, triangle.pd2, center});
+        output.push_back({triangle.pd1, center, triangle.pd3});
+        output.push_back({center, triangle.pd2, triangle.pd3});
+    }
+
+    return output;
+}
+
+
 void ProcessInput(GLFWwindow* window)
 {
     if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
@@ -523,13 +538,19 @@ int main()
     //AddPoint(points, -0.9, -0.5);
     AddPoint(points, -0.5, -0.8);
 
-    const auto polygons = ExtractTriangles(points);
+    const auto triangles = ExtractTriangles(points);
 
-    std::cout << polygons.size() << '\n';
+    std::cout << triangles.size() << '\n';
 
-    PrintTriangles(polygons);
+    PrintTriangles(triangles);
 
-    const std::vector<Triangle> triangles = CreateTrianglesFromPoints(points);
+    const auto smallerTriangles = ExtractSmallerTriangles(triangles);
+
+    std::cout << smallerTriangles.size() << '\n';
+
+    PrintTriangles(smallerTriangles);
+
+    const std::vector<Triangle> trianglesToDraw = CreateTrianglesFromPoints(points);
 
     GLuint pointsVertexShader = CompileShader("shaders/shader.vert", GL_VERTEX_SHADER);
     GLuint pointsFragmentShader = CompileShader("shaders/shader.frag", GL_FRAGMENT_SHADER);
@@ -552,7 +573,7 @@ int main()
 
 	InitializePointsAttribPointers();
 
-	const auto trianglesPoints = TransformTrianglesIntoPoints(triangles);
+	const auto trianglesPoints = TransformTrianglesIntoPoints(trianglesToDraw);
 
 
     while (!glfwWindowShouldClose(window))

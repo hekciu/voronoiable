@@ -77,8 +77,6 @@ GLfloat CalculateDistance(const PointData& pd1, const PointData& pd2) {
 
 
 LineEq GetLineEquation(const PointData & p1, const PointData & p2){
-    // TODO: handle situation if x1 == x2
-
     LineEq output = {};
 
     output.a = (p1.y - p2.y) / (p1.x - p2.x);
@@ -182,7 +180,6 @@ bool DoLinesIntersect(
         }
     }
 
-    // TODO:: use std::pair to handle error if lines do not intersect
     PointData intersectionPoint = GetIntersectionPoint(lineEq1, lineEq2);
 
     GLfloat x1_first = std::fmin(l1p1.x, l1p2.x);
@@ -331,15 +328,28 @@ std::vector<TriangleData> ExtractTriangles(const std::vector<Point> & points) {
 }
 
 
+PointData GetCenterOfLine(const PointData& p1, const PointData& p2) {
+    return { (p1.x + p2.x) / 2.0f, (p1.y + p2.y) / 2.0f};
+}
+
+
 std::vector<TriangleData> ExtractSmallerTriangles(const std::vector<TriangleData>& input) {
     std::vector<TriangleData> output = {};
 
     for (const auto& triangle : input) {
         const auto center = CalculateCenterOfGravity({ triangle.pd1, triangle.pd2, triangle.pd3 });
 
-        output.push_back({triangle.pd1, triangle.pd2, center});
-        output.push_back({triangle.pd1, center, triangle.pd3});
-        output.push_back({center, triangle.pd2, triangle.pd3});
+        const auto center12 = GetCenterOfLine(triangle.pd1, triangle.pd2);
+        output.push_back({triangle.pd1, center12, center});
+        output.push_back({center12, triangle.pd2, center});
+
+        const auto center23 = GetCenterOfLine(triangle.pd2, triangle.pd3);
+        output.push_back({triangle.pd2, center23, center});
+        output.push_back({center23, triangle.pd3, center});
+
+        const auto center31 = GetCenterOfLine(triangle.pd3, triangle.pd1);
+        output.push_back({triangle.pd3, center31, center});
+        output.push_back({center31, triangle.pd1, center});
     }
 
     return output;
@@ -494,6 +504,42 @@ std::vector<Point> TransformTrianglesIntoPoints(const std::vector<Triangle> & tr
 }
 
 
+Point GetNearestPoint(const std::vector<Point>& points, const PointData& ref) {
+    assert(points.size() > 0);
+
+    Point best = points[0];
+
+    for (const auto& point : points) {
+        const auto curDistance = CalculateDistance(point.pointData, ref);
+        const auto curBestDistance = CalculateDistance(best.pointData, ref);
+
+        if (FloatsLessOrEqual(curDistance, curBestDistance)) {
+            best = point;
+        }
+
+    }
+
+    return best;
+}
+
+
+std::vector<Triangle> AddColorsToTriangles(const std::vector<TriangleData>& trianglesData, const std::vector<Point>& points) {
+    std::vector<Triangle> output = {};
+
+    for (const auto& triangleData : trianglesData) {
+        const auto centerOfGravity = CalculateCenterOfGravity({ triangleData.pd1, triangleData.pd2, triangleData.pd3 });
+
+        const auto point = GetNearestPoint(points, centerOfGravity);
+
+        output.push_back({ triangleData, point.color });
+    }
+
+    return output;
+}
+
+
+
+
 int main()
 {
     glfwInit();
@@ -550,7 +596,9 @@ int main()
 
     PrintTriangles(smallerTriangles);
 
-    const std::vector<Triangle> trianglesToDraw = CreateTrianglesFromPoints(points);
+    // const std::vector<Triangle> trianglesToDraw = CreateTrianglesFromPoints(points);
+
+    const std::vector<Triangle> trianglesToDraw = AddColorsToTriangles(smallerTriangles, points);
 
     GLuint pointsVertexShader = CompileShader("shaders/shader.vert", GL_VERTEX_SHADER);
     GLuint pointsFragmentShader = CompileShader("shaders/shader.frag", GL_FRAGMENT_SHADER);

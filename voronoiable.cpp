@@ -52,7 +52,7 @@ struct LineEq {
 bool FloatsEqual(const GLfloat & f1, const GLfloat & f2) {
     const auto constexpr epsilon = std::numeric_limits<GLfloat>().epsilon();
 
-    return std::fabs(f1 - f2) < epsilon;
+    return std::fabs(f1 - f2) < epsilon * 3;
 }
 
 
@@ -67,6 +67,13 @@ bool FloatsLessOrEqual(const GLfloat & f1, const GLfloat & f2) {
 
 
 bool PointsDataEqual(const PointData & pd1, const PointData & pd2) {
+    /*
+    std::cout << "points data equal " << '\n';
+    std::cout << "p1 x: " << pd1.x << " y: " << pd1.y << '\n';
+    std::cout << "p2 x: " << pd2.x << " y: " << pd2.y << '\n';
+    std::cout << "output " << FloatsEqual(pd1.x, pd2.x) << " " << FloatsEqual(pd1.y, pd2.y) << " " << (FloatsEqual(pd1.x, pd2.x) && FloatsEqual(pd1.y, pd2.y)) <<std::endl;
+    */
+
     return FloatsEqual(pd1.x, pd2.x) && FloatsEqual(pd1.y, pd2.y);
 }
 
@@ -96,11 +103,18 @@ PointData GetIntersectionPoint(const LineEq& le1, const LineEq& le2) {
 }
 
 
-GLfloat CalculatePointToLineDistance(const PointData & pointData, const LineEq & lineEquation) {
+LineEq GetPerpendicularLine(const LineEq& lineEq, const PointData& intersectionPoint) {
     LineEq perpendicularLine = {};
 
-    perpendicularLine.a = -1.0f / lineEquation.a;
-    perpendicularLine.b = pointData.y - pointData.x * perpendicularLine.a;
+    perpendicularLine.a = -1.0f / lineEq.a;
+    perpendicularLine.b = intersectionPoint.y - intersectionPoint.x * perpendicularLine.a;
+
+    return perpendicularLine;
+}
+
+
+GLfloat CalculatePointToLineDistance(const PointData & pointData, const LineEq & lineEquation) {
+    const auto perpendicularLine = GetPerpendicularLine(lineEquation, pointData);
 
     const PointData intersectionPoint = GetIntersectionPoint(lineEquation, perpendicularLine);
 
@@ -147,15 +161,41 @@ bool IsPointInsideTriangle(const TriangleData& triangleData, const PointData& po
 
     return result;
 }
+
+
+bool IsPointInsideTriangleOrOnTheEdge(const TriangleData& triangleData, const PointData& pointData) {
+    GLfloat wholeArea = GetTriangleArea(triangleData.pd1, triangleData.pd2, triangleData.pd3);
+
+    GLfloat firstArea = GetTriangleArea(pointData, triangleData.pd2, triangleData.pd3);
+    GLfloat secondArea = GetTriangleArea(triangleData.pd1, pointData, triangleData.pd3);
+    GLfloat thirdArea = GetTriangleArea(triangleData.pd1, triangleData.pd2, pointData);
+
+    bool result = FloatsEqual(wholeArea, firstArea + secondArea + thirdArea);
+
+    return result;
+}
  
 
-void PrintTriangles(const std::vector<TriangleData>& triangles) {
+void PrintTrianglesData(const std::vector<TriangleData>& triangles) {
     for (const auto& triangle : triangles) {
         std::cout << "triangle" << std::endl;
 
 		std::cout << "p1 x: " << triangle.pd1.x << " y: " << triangle.pd1.y << " | ";
 		std::cout << "p2 x: " << triangle.pd2.x << " y: " << triangle.pd2.y << " | ";
 		std::cout << "p3 x: " << triangle.pd3.x << " y: " << triangle.pd3.y << " | ";
+
+        std::cout << "" << std::endl;
+    }
+}
+ 
+
+void PrintTriangles(const std::vector<Triangle>& triangles) {
+    for (const auto& triangle : triangles) {
+        std::cout << "triangle" << std::endl;
+
+		std::cout << "p1 x: " << triangle.triangleData.pd1.x << " y: " << triangle.triangleData.pd1.y << " | ";
+		std::cout << "p2 x: " << triangle.triangleData.pd2.x << " y: " << triangle.triangleData.pd2.y << " | ";
+		std::cout << "p3 x: " << triangle.triangleData.pd3.x << " y: " << triangle.triangleData.pd3.y << " | ";
 
         std::cout << "" << std::endl;
     }
@@ -538,6 +578,181 @@ std::vector<Triangle> AddColorsToTriangles(const std::vector<TriangleData>& tria
 }
 
 
+LineEq GetPerpendicularLineFromCenter(const PointData& firstPoint, const PointData& secondPoint) {
+    const auto lineEq = GetLineEquation(firstPoint, secondPoint);
+
+    const PointData middlePoint = GetCenterOfLine(firstPoint, secondPoint);
+
+    return GetPerpendicularLine(lineEq, middlePoint);
+}
+
+
+std::vector<LineEq> GetLinesBetween(const std::vector<Point>& points) {
+    std::vector<LineEq> linesBetween = {};
+
+    for (size_t i = 0; i < points.size(); i++) {
+        const auto& firstPoint = points[i];
+
+        for (size_t j = i + 1; j < points.size(); j++) {
+			const auto& secondPoint = points[j];
+
+            linesBetween.push_back(GetPerpendicularLineFromCenter(firstPoint.pointData, secondPoint.pointData));
+        }
+    }
+
+    return linesBetween;
+}
+
+
+std::vector<PointData> GetAllCentersOfLines(const std::vector<Point>& points) {
+    std::vector<PointData> output = {};
+
+    for (size_t i = 0; i < points.size(); i++) {
+        const auto& firstPoint = points[i];
+
+        for (size_t j = 0; j < points.size(); j++) {
+            if (j == i) continue;
+
+			const auto& secondPoint = points[j];
+
+            output.push_back(GetCenterOfLine(firstPoint.pointData, secondPoint.pointData));
+        }
+    }
+
+    return output;
+}
+
+
+std::vector<PointData> GetAllIntersectionPoints(const std::vector<LineEq>& lines) {
+    std::vector<PointData> intersectionPoints = {};
+
+    for (size_t i = 0; i < lines.size(); i++) {
+        const auto& firstLine = lines[i];
+
+        for (size_t j = i + 1; j < lines.size(); j++) {
+			const auto& secondLine = lines[j];
+
+            intersectionPoints.push_back(GetIntersectionPoint(firstLine, secondLine));
+        }
+    }
+
+    return intersectionPoints;
+}
+
+
+bool CouldVoronoiTriangleBeAdded(
+    const TriangleData& triangle,
+    const std::vector<Point>& points,
+    const std::vector<PointData>& intersectionPoints,
+    const std::vector<Triangle>& triangles
+) {
+    for (const auto& point : points) {
+        if (IsPointInsideTriangleOrOnTheEdge(triangle, point.pointData)) return false;
+    }
+
+    for (const auto& point : intersectionPoints) {
+        if (IsPointInsideTriangleOrOnTheEdge(triangle, point)) return false;
+    }
+
+    for (const auto& curTriangle : triangles) {
+        if (DoTrianglesIntersect(triangle, curTriangle.triangleData)) return false;
+    }
+
+    return true;
+}
+
+
+template <typename T, typename F>
+bool DoesVectorContainElement(
+    const std::vector<T>& elements,
+    const T& element,
+    const F&& areElementsEqual
+) {
+    for (const T& curElement : elements) {
+        if (areElementsEqual(curElement, element)) return true;
+    }
+
+    return false;
+}
+
+
+std::vector<PointData> FilterBadIntersectionPoints(
+    const std::vector<PointData>& intersectionPoints,
+    const std::vector<PointData>& points
+) {
+    std::vector<PointData> output = {};
+
+    for (const auto& intersectionPoint : intersectionPoints) {
+        if (
+            !DoesVectorContainElement(output, intersectionPoint, PointsDataEqual) &&
+            !DoesVectorContainElement(points, intersectionPoint, PointsDataEqual) &&
+            FloatsBiggerOrEqual(intersectionPoint.x, -1.0f) &&
+            FloatsLessOrEqual(intersectionPoint.x, 1.0f) &&
+            FloatsBiggerOrEqual(intersectionPoint.y, -1.0f) &&
+            FloatsLessOrEqual(intersectionPoint.y, 1.0f)
+        ) {
+            output.push_back(intersectionPoint);
+        }
+    }
+
+    return output;
+}
+
+
+std::vector<PointData> ExtractPointDatas(const std::vector<Point>& points) {
+    std::vector<PointData> output = {};
+
+    for (const auto& point : points) {
+        output.push_back(point.pointData);
+    }
+
+    return output;
+}
+
+
+std::vector<Triangle> ExtractVoronoiTriangles(const std::vector<Point>& points) {
+    const auto linesBetween = GetLinesBetween(points);
+
+    std::cout << "lines between" << '\n';
+
+    for (const auto& line : linesBetween) {
+        std::cout << "a: " << line.a << " b: " << line.b << '\n';
+    }
+
+    const auto allIntersectionPoints = GetAllIntersectionPoints(linesBetween);
+
+    const auto centersOfLines = GetAllCentersOfLines(points);
+
+    const auto pointsData = ExtractPointDatas(points);
+
+    const auto intersectionPoints = FilterBadIntersectionPoints(allIntersectionPoints, pointsData);
+
+    std::cout << "intersection points" << '\n';
+
+    for (const auto& p : intersectionPoints) {
+        std::cout << "x: " << p.x << " y: " << p.y << '\n';
+    }
+
+    std::vector<PointData> allPoints = {};
+    allPoints.insert(allPoints.end(), allIntersectionPoints.begin(), allIntersectionPoints.end());
+    allPoints.insert(allPoints.end(), centersOfLines.begin(), centersOfLines.end());
+
+    std::vector<Triangle> triangles = {};
+
+    for (const auto& point : points) {
+        for (const auto& intersectionPoint : intersectionPoints) {
+			for (const auto& centerPoint : centersOfLines) {
+                const Triangle triangle = {point.pointData, intersectionPoint, centerPoint, point.color};
+
+                if (CouldVoronoiTriangleBeAdded(triangle.triangleData, points, allPoints, triangles)) {
+                    triangles.push_back(triangle);
+                }
+			}
+        }
+    }
+
+    return triangles;
+}
 
 
 int main()
@@ -574,7 +789,7 @@ int main()
 
     std::vector<Point> points = {};
 
-    AddPoint(points, -0.9, -0.9);
+    //AddPoint(points, -0.9, -0.9);
     //AddPoint(points, -0.7, -0.9);
     //AddPoint(points, -0.9, -0.7);
     AddPoint(points, -0.7, -0.7);
@@ -584,6 +799,7 @@ int main()
     //AddPoint(points, -0.9, -0.5);
     AddPoint(points, -0.5, -0.8);
 
+    /*
     const auto triangles = ExtractTriangles(points);
 
     std::cout << triangles.size() << '\n';
@@ -599,6 +815,11 @@ int main()
     // const std::vector<Triangle> trianglesToDraw = CreateTrianglesFromPoints(points);
 
     const std::vector<Triangle> trianglesToDraw = AddColorsToTriangles(smallerTriangles, points);
+    */
+
+    const auto trianglesToDraw = ExtractVoronoiTriangles(points);
+
+    PrintTriangles(trianglesToDraw);
 
     GLuint pointsVertexShader = CompileShader("shaders/shader.vert", GL_VERTEX_SHADER);
     GLuint pointsFragmentShader = CompileShader("shaders/shader.frag", GL_FRAGMENT_SHADER);

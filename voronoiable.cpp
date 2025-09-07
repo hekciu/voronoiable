@@ -142,8 +142,8 @@ PointData CalculateCenterOfGravity(const std::vector<PointData> & points) {
     }
 
     return {
-        sum.x / points.size(),
-        sum.y / points.size(),
+        sum.x / (float)points.size(),
+        sum.y / (float)points.size(),
     };
 }
 
@@ -710,7 +710,28 @@ std::vector<PointData> ExtractPointDatas(const std::vector<Point>& points) {
 }
 
 
-std::vector<Triangle> ExtractVoronoiTriangles(const std::vector<Point>& points) {
+std::vector<Triangle> ExtractTriangles1(const std::vector<Point>& points) {
+    const auto triangles = ExtractTriangles(points);
+
+    std::cout << triangles.size() << '\n';
+
+    //PrintTriangles(triangles);
+
+    const auto smallerTriangles = ExtractSmallerTriangles(triangles);
+
+    std::cout << smallerTriangles.size() << '\n';
+
+    //PrintTrianglesData(smallerTriangles);
+
+    // const std::vector<Triangle> trianglesToDraw = CreateTrianglesFromPoints(points);
+
+    const std::vector<Triangle> trianglesToDraw = AddColorsToTriangles(smallerTriangles, points);
+
+    return trianglesToDraw;
+}
+
+
+std::vector<Triangle> ExtractTriangles2(const std::vector<Point>& points) {
     const auto linesBetween = GetLinesBetween(points);
 
     std::cout << "lines between" << '\n';
@@ -755,6 +776,124 @@ std::vector<Triangle> ExtractVoronoiTriangles(const std::vector<Point>& points) 
 }
 
 
+std::pair<PointData, PointData> GetSmallerPair(
+    const std::pair<PointData, PointData>&& firstPair,
+    const std::pair<PointData, PointData>&& secondPair
+) {
+    const auto firstSize = CalculateDistance(firstPair.first, firstPair.second);
+    const auto secondSize = CalculateDistance(secondPair.first, secondPair.second);
+
+    if (firstSize < secondSize) return firstPair;
+
+    return secondPair;
+}
+
+
+std::pair<PointData, PointData> GetLongestLine(
+    const std::vector<std::pair<PointData, PointData>>&& lines
+) {
+    assert(lines.size() > 0);
+
+    GLfloat currentBestDistance = 0.0f;
+    auto currentBest = lines[0];
+
+    for (const auto& line : lines) {
+        const auto distance = CalculateDistance(line.first, line.second);
+
+        if (distance > currentBestDistance) {
+            currentBestDistance = distance;
+            currentBest = line;
+        }
+    }
+
+    return currentBest;
+}
+
+
+std::vector<Triangle> ExtractTriangles3(const std::vector<Point>& points) {
+    const auto bigTriangles = ExtractTriangles(points);
+
+    std::vector<TriangleData> trianglesData = {};
+
+    for (const auto& bigTriangle : bigTriangles) {
+        const auto p1p2Center = GetCenterOfLine(bigTriangle.pd1, bigTriangle.pd2);
+        const auto p2p3Center = GetCenterOfLine(bigTriangle.pd2, bigTriangle.pd3);
+        const auto p3p1Center = GetCenterOfLine(bigTriangle.pd3, bigTriangle.pd1);
+
+        trianglesData.push_back({bigTriangle.pd1, p1p2Center, p3p1Center});
+
+        trianglesData.push_back({bigTriangle.pd2, p1p2Center, p2p3Center});
+
+        trianglesData.push_back({bigTriangle.pd3, p2p3Center, p3p1Center});
+    }
+
+    const std::vector<Triangle> trianglesToDraw = AddColorsToTriangles(trianglesData, points);
+
+    return trianglesToDraw;
+}
+
+
+std::vector<Triangle> ExtractTriangles4(const std::vector<Point>& points) {
+    const auto bigTriangles = ExtractTriangles(points);
+
+    std::vector<TriangleData> trianglesData = {};
+
+    for (const auto& bigTriangle : bigTriangles) {
+        const auto p1p2Center = GetCenterOfLine(bigTriangle.pd1, bigTriangle.pd2);
+        const auto p2p3Center = GetCenterOfLine(bigTriangle.pd2, bigTriangle.pd3);
+        const auto p3p1Center = GetCenterOfLine(bigTriangle.pd3, bigTriangle.pd1);
+
+        const auto p1p2PerpendicularLine = GetPerpendicularLineFromCenter(bigTriangle.pd1, bigTriangle.pd2);
+        const auto p2p3PerpendicularLine = GetPerpendicularLineFromCenter(bigTriangle.pd2, bigTriangle.pd3);
+        const auto p3p1PerpendicularLine = GetPerpendicularLineFromCenter(bigTriangle.pd3, bigTriangle.pd1);
+
+        const auto p1IntersectionPoint = GetIntersectionPoint(p1p2PerpendicularLine, p3p1PerpendicularLine);
+        const auto p2IntersectionPoint = GetIntersectionPoint(p1p2PerpendicularLine, p2p3PerpendicularLine);
+        const auto p3IntersectionPoint = GetIntersectionPoint(p2p3PerpendicularLine, p3p1PerpendicularLine);
+
+        std::cout << "first intersection point x: " << p1IntersectionPoint.x << " y: " << p1IntersectionPoint.y << '\n';
+        std::cout << "second intersection point x: " << p2IntersectionPoint.x << " y: " << p2IntersectionPoint.y << '\n';
+        std::cout << "third intersection point x: " << p3IntersectionPoint.x << " y: " << p3IntersectionPoint.y << '\n';
+
+        /*
+        assert(PointsDataEqual(p1IntersectionPoint, p2IntersectionPoint));
+        assert(PointsDataEqual(p2IntersectionPoint, p3IntersectionPoint));
+        assert(PointsDataEqual(p3IntersectionPoint, p1IntersectionPoint));
+        */
+
+        const auto triangleCircleCenter = p1IntersectionPoint;
+
+        // variant 1 -> acute triangle
+        // variant 2 -> right triangle triangle
+        // variant 3 -> obtuse triangle
+        if (IsPointInsideTriangle(bigTriangle, triangleCircleCenter)) {
+			trianglesData.push_back({bigTriangle.pd1, p1p2Center, triangleCircleCenter});
+			trianglesData.push_back({bigTriangle.pd1, triangleCircleCenter, p3p1Center});
+
+			trianglesData.push_back({bigTriangle.pd2, p1p2Center, triangleCircleCenter});
+			trianglesData.push_back({bigTriangle.pd2, triangleCircleCenter, p2p3Center});
+
+			trianglesData.push_back({bigTriangle.pd3, p2p3Center, triangleCircleCenter});
+			trianglesData.push_back({bigTriangle.pd3, triangleCircleCenter, p3p1Center});
+        }
+        else if (IsPointInsideTriangleOrOnTheEdge(bigTriangle, triangleCircleCenter)) {
+            const auto longestLine = GetLongestLine({
+                {bigTriangle.pd1, bigTriangle.pd2},
+                {bigTriangle.pd2, bigTriangle.pd3},
+                {bigTriangle.pd3, bigTriangle.pd1}
+            });
+        }
+        else {
+            std::cout << "dupadupa dupa dupadupa " << '\n';
+        }
+    }
+
+    const std::vector<Triangle> trianglesToDraw = AddColorsToTriangles(trianglesData, points);
+
+    return trianglesToDraw;
+}
+
+
 int main()
 {
     glfwInit();
@@ -789,9 +928,9 @@ int main()
 
     std::vector<Point> points = {};
 
-    //AddPoint(points, -0.9, -0.9);
+    AddPoint(points, -0.9, -0.9);
     //AddPoint(points, -0.7, -0.9);
-    //AddPoint(points, -0.9, -0.7);
+    //AddPoint(points, -0.9, -0.8);
     AddPoint(points, -0.7, -0.7);
     //AddPoint(points, -0.5, -0.7);
     //AddPoint(points, -0.7, -0.5);
@@ -799,27 +938,15 @@ int main()
     //AddPoint(points, -0.9, -0.5);
     AddPoint(points, -0.5, -0.8);
 
-    /*
-    const auto triangles = ExtractTriangles(points);
+    //const auto trianglesToDraw = ExtractVoronoiTriangles(points);
 
-    std::cout << triangles.size() << '\n';
+    const auto trianglesToDraw = ExtractTriangles4(points);
 
-    PrintTriangles(triangles);
+    //PrintTriangles(trianglesToDraw);
 
-    const auto smallerTriangles = ExtractSmallerTriangles(triangles);
+    const auto test = CalculateCenterOfGravity({ {3, 5}, {4, 1}, {1, 0} });
 
-    std::cout << smallerTriangles.size() << '\n';
-
-    PrintTriangles(smallerTriangles);
-
-    // const std::vector<Triangle> trianglesToDraw = CreateTrianglesFromPoints(points);
-
-    const std::vector<Triangle> trianglesToDraw = AddColorsToTriangles(smallerTriangles, points);
-    */
-
-    const auto trianglesToDraw = ExtractVoronoiTriangles(points);
-
-    PrintTriangles(trianglesToDraw);
+    std::cout << "test123 x: " << test.x << " y: " << test.y << '\n';
 
     GLuint pointsVertexShader = CompileShader("shaders/shader.vert", GL_VERTEX_SHADER);
     GLuint pointsFragmentShader = CompileShader("shaders/shader.frag", GL_FRAGMENT_SHADER);

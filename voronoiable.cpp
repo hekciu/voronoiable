@@ -44,8 +44,12 @@ struct Triangle {
 
 
 struct LineEq {
-    GLfloat a;
+    union {
+		GLfloat a;
+        GLfloat x;
+    };
     GLfloat b;
+    bool isVertical = false;
 };
 
 
@@ -86,6 +90,12 @@ GLfloat CalculateDistance(const PointData& pd1, const PointData& pd2) {
 LineEq GetLineEquation(const PointData & p1, const PointData & p2){
     LineEq output = {};
 
+    if (FloatsEqual(p1.x, p2.x)) {
+        output.isVertical = true;
+        output.x = p1.x;
+        return output;
+    }
+
     output.a = (p1.y - p2.y) / (p1.x - p2.x);
     output.b = p1.y - output.a * p1.x;
 
@@ -96,8 +106,18 @@ LineEq GetLineEquation(const PointData & p1, const PointData & p2){
 PointData GetIntersectionPoint(const LineEq& le1, const LineEq& le2) {
     PointData output = {};
 
-    output.x = (le2.b - le1.b) / (le1.a - le2.a);
-    output.y = output.x * le1.a + le1.b;
+    if (le1.isVertical) {
+        output.x = le1.x;
+		output.y = output.x * le2.a + le2.b;
+    }
+    else if (le2.isVertical) {
+        output.x = le2.x;
+		output.y = output.x * le1.a + le1.b;
+    }
+    else {
+		output.x = (le2.b - le1.b) / (le1.a - le2.a);
+		output.y = output.x * le1.a + le1.b;
+    }
 
     return output;
 }
@@ -106,8 +126,18 @@ PointData GetIntersectionPoint(const LineEq& le1, const LineEq& le2) {
 LineEq GetPerpendicularLine(const LineEq& lineEq, const PointData& intersectionPoint) {
     LineEq perpendicularLine = {};
 
-    perpendicularLine.a = -1.0f / lineEq.a;
-    perpendicularLine.b = intersectionPoint.y - intersectionPoint.x * perpendicularLine.a;
+    if (lineEq.isVertical) {
+        perpendicularLine.a = 0;
+        perpendicularLine.b = intersectionPoint.y;
+    }
+    else if (FloatsEqual(lineEq.a, 0.0f)) {
+        perpendicularLine.isVertical = true;
+        perpendicularLine.x = intersectionPoint.x;
+    }
+    else {
+		perpendicularLine.a = -1.0f / lineEq.a;
+		perpendicularLine.b = intersectionPoint.y - intersectionPoint.x * perpendicularLine.a;
+    }
 
     return perpendicularLine;
 }
@@ -343,10 +373,6 @@ std::vector<TriangleData> ExtractTriangles(const std::vector<Point> & points) {
     std::vector<TriangleData> triangles = {};
 
     std::optional<TriangleData> triangle = {};
-
-    for (const auto& point : pointsData) {
-        std::cout << "point " << point.x << " " << point.y << '\n';
-    }
 
     for (size_t i = 0; i < pointsData.size(); i++) {
         const auto& point = pointsData[i];
@@ -878,10 +904,6 @@ std::vector<Triangle> ExtractTriangles4(const std::vector<Point>& points) {
         const auto p2IntersectionPoint = GetIntersectionPoint(p1p2PerpendicularLine, p2p3PerpendicularLine);
         const auto p3IntersectionPoint = GetIntersectionPoint(p2p3PerpendicularLine, p3p1PerpendicularLine);
 
-        std::cout << "first intersection point x: " << p1IntersectionPoint.x << " y: " << p1IntersectionPoint.y << '\n';
-        std::cout << "second intersection point x: " << p2IntersectionPoint.x << " y: " << p2IntersectionPoint.y << '\n';
-        std::cout << "third intersection point x: " << p3IntersectionPoint.x << " y: " << p3IntersectionPoint.y << '\n';
-
         /*
         assert(PointsDataEqual(p1IntersectionPoint, p2IntersectionPoint));
         assert(PointsDataEqual(p2IntersectionPoint, p3IntersectionPoint));
@@ -894,7 +916,6 @@ std::vector<Triangle> ExtractTriangles4(const std::vector<Point>& points) {
         // variant 2 -> right triangle triangle
         // variant 3 -> obtuse triangle
         if (IsPointInsideTriangle(bigTriangle, triangleCircleCenter)) {
-            std::cout << "variant 1 " << '\n';
 			trianglesData.push_back({bigTriangle.pd1, p1p2Center, triangleCircleCenter});
 			trianglesData.push_back({bigTriangle.pd1, triangleCircleCenter, p3p1Center});
 
@@ -905,8 +926,6 @@ std::vector<Triangle> ExtractTriangles4(const std::vector<Point>& points) {
 			trianglesData.push_back({bigTriangle.pd3, triangleCircleCenter, p3p1Center});
         }
         else if (IsPointInsideTriangleOrOnTheEdge(bigTriangle, triangleCircleCenter)) {
-            std::cout << "variant 2 " << '\n';
-
             const std::vector<std::pair<PointData, PointData>> lines = {
                 {bigTriangle.pd1, bigTriangle.pd2},
                 {bigTriangle.pd2, bigTriangle.pd3},
@@ -942,9 +961,6 @@ std::vector<Triangle> ExtractTriangles4(const std::vector<Point>& points) {
             }
         }
         else {
-            std::cout << "variant 3 " << '\n';
-
-
             const std::vector<std::pair<PointData, PointData>> lines = {
                 {bigTriangle.pd1, bigTriangle.pd2},
                 {bigTriangle.pd2, bigTriangle.pd3},
@@ -1036,8 +1052,8 @@ int main()
 
     std::vector<Point> points = {};
 
-    AddPoint(points, -0.9, -0.9);
-    //AddPoint(points, -0.7, -0.9);
+    //AddPoint(points, -0.9, -0.9);
+    AddPoint(points, -0.7, -0.9);
     //AddPoint(points, -0.9, -0.8);
     AddPoint(points, -0.7, -0.7);
     //AddPoint(points, -0.5, -0.7);

@@ -790,7 +790,7 @@ std::pair<PointData, PointData> GetSmallerPair(
 
 
 std::pair<PointData, PointData> GetLongestLine(
-    const std::vector<std::pair<PointData, PointData>>&& lines
+    const std::vector<std::pair<PointData, PointData>>& lines
 ) {
     assert(lines.size() > 0);
 
@@ -803,6 +803,29 @@ std::pair<PointData, PointData> GetLongestLine(
         if (distance > currentBestDistance) {
             currentBestDistance = distance;
             currentBest = line;
+        }
+    }
+
+    return currentBest;
+}
+
+
+size_t GetLongestLineIndex(
+    const std::vector<std::pair<PointData, PointData>>& lines
+) {
+    assert(lines.size() > 0);
+
+    GLfloat currentBestDistance = 0.0f;
+    size_t currentBest = 0;
+
+    for (size_t i = 0; i < lines.size(); i++) {
+        const auto line = lines[i];
+
+        const auto distance = CalculateDistance(line.first, line.second);
+
+        if (distance > currentBestDistance) {
+            currentBestDistance = distance;
+            currentBest = i;
         }
     }
 
@@ -843,6 +866,10 @@ std::vector<Triangle> ExtractTriangles4(const std::vector<Point>& points) {
         const auto p2p3Center = GetCenterOfLine(bigTriangle.pd2, bigTriangle.pd3);
         const auto p3p1Center = GetCenterOfLine(bigTriangle.pd3, bigTriangle.pd1);
 
+        const auto p1p2Line = GetLineEquation(bigTriangle.pd1, bigTriangle.pd2);
+        const auto p2p3Line = GetLineEquation(bigTriangle.pd2, bigTriangle.pd3);
+        const auto p3p1Line = GetLineEquation(bigTriangle.pd3, bigTriangle.pd1);
+
         const auto p1p2PerpendicularLine = GetPerpendicularLineFromCenter(bigTriangle.pd1, bigTriangle.pd2);
         const auto p2p3PerpendicularLine = GetPerpendicularLineFromCenter(bigTriangle.pd2, bigTriangle.pd3);
         const auto p3p1PerpendicularLine = GetPerpendicularLineFromCenter(bigTriangle.pd3, bigTriangle.pd1);
@@ -867,6 +894,7 @@ std::vector<Triangle> ExtractTriangles4(const std::vector<Point>& points) {
         // variant 2 -> right triangle triangle
         // variant 3 -> obtuse triangle
         if (IsPointInsideTriangle(bigTriangle, triangleCircleCenter)) {
+            std::cout << "variant 1 " << '\n';
 			trianglesData.push_back({bigTriangle.pd1, p1p2Center, triangleCircleCenter});
 			trianglesData.push_back({bigTriangle.pd1, triangleCircleCenter, p3p1Center});
 
@@ -877,14 +905,94 @@ std::vector<Triangle> ExtractTriangles4(const std::vector<Point>& points) {
 			trianglesData.push_back({bigTriangle.pd3, triangleCircleCenter, p3p1Center});
         }
         else if (IsPointInsideTriangleOrOnTheEdge(bigTriangle, triangleCircleCenter)) {
-            const auto longestLine = GetLongestLine({
+            std::cout << "variant 2 " << '\n';
+
+            const std::vector<std::pair<PointData, PointData>> lines = {
                 {bigTriangle.pd1, bigTriangle.pd2},
                 {bigTriangle.pd2, bigTriangle.pd3},
                 {bigTriangle.pd3, bigTriangle.pd1}
-            });
+            };
+
+            const auto longestLineIndex = GetLongestLineIndex(lines);
+
+            switch (longestLineIndex) {
+            case 0:
+                trianglesData.push_back({bigTriangle.pd3, p2p3Center, triangleCircleCenter});
+                trianglesData.push_back({bigTriangle.pd3, p3p1Center, triangleCircleCenter});
+
+                trianglesData.push_back({bigTriangle.pd1, p3p1Center, triangleCircleCenter});
+                trianglesData.push_back({bigTriangle.pd2, p2p3Center, triangleCircleCenter});
+                break;
+            case 1:
+                trianglesData.push_back({bigTriangle.pd1, p1p2Center, triangleCircleCenter});
+                trianglesData.push_back({bigTriangle.pd1, p3p1Center, triangleCircleCenter});
+
+                trianglesData.push_back({bigTriangle.pd3, p3p1Center, triangleCircleCenter});
+                trianglesData.push_back({bigTriangle.pd2, p1p2Center, triangleCircleCenter});
+                break;
+            case 2:
+                trianglesData.push_back({bigTriangle.pd2, p1p2Center, triangleCircleCenter});
+                trianglesData.push_back({bigTriangle.pd2, p2p3Center, triangleCircleCenter});
+
+                trianglesData.push_back({bigTriangle.pd1, p1p2Center, triangleCircleCenter});
+                trianglesData.push_back({bigTriangle.pd3, p2p3Center, triangleCircleCenter});
+                break;
+            default:
+                exit(1);
+            }
         }
         else {
-            std::cout << "dupadupa dupa dupadupa " << '\n';
+            std::cout << "variant 3 " << '\n';
+
+
+            const std::vector<std::pair<PointData, PointData>> lines = {
+                {bigTriangle.pd1, bigTriangle.pd2},
+                {bigTriangle.pd2, bigTriangle.pd3},
+                {bigTriangle.pd3, bigTriangle.pd1}
+            };
+
+            const auto longestLineIndex = GetLongestLineIndex(lines);
+
+            switch (longestLineIndex) {
+            case 0:
+                const auto p1p2IntersectionWithp2p3CenterLine = GetIntersectionPoint(p1p2Line, p2p3PerpendicularLine);
+                const auto p1p2IntersectionWithp3p1CenterLine = GetIntersectionPoint(p1p2Line, p3p1PerpendicularLine);
+
+                trianglesData.push_back({ bigTriangle.pd1, p1p2IntersectionWithp3p1CenterLine, p3p1Center });
+                trianglesData.push_back({ bigTriangle.pd2, p1p2IntersectionWithp2p3CenterLine, p2p3Center });
+
+                trianglesData.push_back({bigTriangle.pd3, p2p3Center, p1p2IntersectionWithp2p3CenterLine});
+                trianglesData.push_back({bigTriangle.pd3, p3p1Center, p1p2IntersectionWithp3p1CenterLine});
+
+                trianglesData.push_back({bigTriangle.pd3, p1p2IntersectionWithp2p3CenterLine, p1p2IntersectionWithp3p1CenterLine});
+                break;
+            case 1:
+                const auto p2p3IntersectionWithp1p2CenterLine = GetIntersectionPoint(p2p3Line, p1p2PerpendicularLine);
+                const auto p2p3IntersectionWithp3p1CenterLine = GetIntersectionPoint(p2p3Line, p3p1PerpendicularLine);
+
+                trianglesData.push_back({ bigTriangle.pd2, p2p3IntersectionWithp1p2CenterLine, p1p2Center });
+                trianglesData.push_back({ bigTriangle.pd3, p2p3IntersectionWithp3p1CenterLine, p3p1Center });
+
+                trianglesData.push_back({bigTriangle.pd1, p1p2Center, p2p3IntersectionWithp1p2CenterLine});
+                trianglesData.push_back({bigTriangle.pd1, p3p1Center, p2p3IntersectionWithp3p1CenterLine});
+
+                trianglesData.push_back({bigTriangle.pd1, p2p3IntersectionWithp1p2CenterLine, p2p3IntersectionWithp3p1CenterLine});
+                break;
+            case 2:
+                const auto p3p1IntersectionWithp1p2CenterLine = GetIntersectionPoint(p3p1Line, p1p2PerpendicularLine);
+                const auto p3p1IntersectionWithp2p3CenterLine = GetIntersectionPoint(p3p1Line, p2p3PerpendicularLine);
+
+                trianglesData.push_back({ bigTriangle.pd1, p3p1IntersectionWithp1p2CenterLine, p1p2Center });
+                trianglesData.push_back({ bigTriangle.pd3, p3p1IntersectionWithp2p3CenterLine, p2p3Center });
+
+                trianglesData.push_back({bigTriangle.pd2, p1p2Center, p3p1IntersectionWithp1p2CenterLine});
+                trianglesData.push_back({bigTriangle.pd2, p2p3Center, p3p1IntersectionWithp2p3CenterLine});
+
+                trianglesData.push_back({bigTriangle.pd2, p3p1IntersectionWithp1p2CenterLine, p3p1IntersectionWithp2p3CenterLine});
+                break;
+            default:
+                exit(1);
+            }
         }
     }
 

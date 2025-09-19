@@ -882,9 +882,7 @@ std::vector<Triangle> ExtractTriangles3(const std::vector<Point>& points) {
 }
 
 
-std::vector<Triangle> ExtractTriangles4(const std::vector<Point>& points) {
-    const auto bigTriangles = ExtractTriangles(points);
-
+std::vector<TriangleData> PerformExtractTriangles4MumboJumbo(const std::vector<TriangleData>& bigTriangles) {
     std::vector<TriangleData> trianglesData = {};
 
     for (const auto& bigTriangle : bigTriangles) {
@@ -1012,6 +1010,41 @@ std::vector<Triangle> ExtractTriangles4(const std::vector<Point>& points) {
         }
     }
 
+    return trianglesData;
+}
+
+
+std::vector<Triangle> ExtractTriangles4(const std::vector<Point>& points) {
+    const auto bigTriangles = ExtractTriangles(points);
+
+    const auto trianglesData = PerformExtractTriangles4MumboJumbo(bigTriangles);
+
+    const std::vector<Triangle> trianglesToDraw = AddColorsToTriangles(trianglesData, points);
+
+    return trianglesToDraw;
+}
+
+
+std::vector<Triangle> ExtractTriangles4_5(const std::vector<Point>& points) {
+    const auto bigTriangles = ExtractTriangles(points);
+
+    std::vector<TriangleData> smallerTriangles = {};
+
+    for (const auto& triangle : bigTriangles) {
+        const LineEq firstLine = GetPerpendicularLineFromCenter(triangle.pd1, triangle.pd2);
+        const LineEq secondLine = GetPerpendicularLineFromCenter(triangle.pd1, triangle.pd3);
+
+        // All three symmetrical lines in a triangle should intersect in one point
+
+        const auto intersectionPoint = GetIntersectionPoint(firstLine, secondLine);
+
+        smallerTriangles.push_back({ triangle.pd1, triangle.pd2, intersectionPoint });
+        smallerTriangles.push_back({ triangle.pd1, intersectionPoint, triangle.pd3 });
+        smallerTriangles.push_back({ intersectionPoint, triangle.pd2, triangle.pd3 });
+    }
+
+    const auto trianglesData = PerformExtractTriangles4MumboJumbo(smallerTriangles);
+
     const std::vector<Triangle> trianglesToDraw = AddColorsToTriangles(trianglesData, points);
 
     return trianglesToDraw;
@@ -1064,7 +1097,7 @@ int main()
 
     //const auto trianglesToDraw = ExtractVoronoiTriangles(points);
 
-    const auto trianglesToDraw = ExtractTriangles4(points);
+    const auto trianglesToDraw = ExtractTriangles4_5(points);
 
     //PrintTriangles(trianglesToDraw);
 
